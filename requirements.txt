@@ -1,0 +1,4 @@
+tensorflow==2.18
+spacy
+streamlit
+spacy download en_core_web_sm
