@@ -28,7 +28,8 @@ def preprocess_sentence(sentences, tokenizer, max_len):
 
 	seq = tokenizer.texts_to_sequences(sentences)
 	padded_seq = pad_sequences(seq, maxlen=max_len, padding='post')
-	seq_lengths = [len(s) for s in seq]  # Keep track of the original lengths before padding
+	# Cap sequence lengths to max_len to avoid index out of bounds
+	seq_lengths = [min(len(s), max_len) for s in seq]  # Keep track of the actual lengths (capped at max_len)
 	return padded_seq, seq_lengths
 
 def decode_predictions(pred, seq_lengths, idx2tag):
@@ -37,6 +38,8 @@ def decode_predictions(pred, seq_lengths, idx2tag):
 	for idx, pred_i in enumerate(pred):
 		output_i = []
 		length = seq_lengths[idx]  # Length of the actual sentence
+		# Ensure we don't exceed the length of predictions
+		length = min(length, len(pred_i))
 		for j in range(length):  # Only iterate over the actual sentence length
 			p = pred_i[j]
 			p_i = np.argmax(p)
@@ -123,7 +126,7 @@ if __name__ == "__main__":
 
 	st.title("Named Entity Recognition Model by using LSTM")
 
-	text_input = st.text_area("",placeholder= "Enter your sentence here")
+	text_input = st.text_area("Input Text", placeholder= "Enter your sentence here", label_visibility="collapsed")
 	st.sidebar.write("About")
 	st.sidebar.write("""
 		This NER labels are associated wuth these number according to their tag, respectively
@@ -163,15 +166,19 @@ if __name__ == "__main__":
 			start_char = 0
 			pred = decoded_predictions[0]
 
-			for j, token in enumerate(doc):
-				label = tag_dict[pred[j]]
-				if label != 'Outside':
-					entities.append({
-						"start": start_char,
-						"end": start_char + len(token.text),
-						"label": label
-					})
-				start_char += len(token.text) + 1
+			# Ensure we only iterate over valid prediction indices
+			num_tokens = min(len(doc), len(pred))
+			
+			for j in range(num_tokens):
+				token = list(doc)[j]
+				if j < len(pred):
+					label = tag_dict[pred[j]]
+					if label != 'Outside':
+						entities.append({
+							"start": token.idx,
+							"end": token.idx + len(token.text),
+							"label": label
+						})
 
 			html = displacy.render([{"text": text_input, "ents": entities, "title": "NER"}], style="ent", manual=True)
 			st.markdown(html, unsafe_allow_html=True)
@@ -179,8 +186,8 @@ if __name__ == "__main__":
 
 			#New data for continuous Learning section
 			st.subheader("For Continuous Learning : ")
-			new_sentence = st.text_input("",placeholder="Enter your Sentence for continous Learning:")
-			new_label = st.text_input("",placeholder="Enter Labels as (e.g., 0 0 0 3 4):")
+			new_sentence = st.text_input("Sentence", placeholder="Enter your Sentence for continous Learning:", label_visibility="collapsed")
+			new_label = st.text_input("Labels", placeholder="Enter Labels as (e.g., 0 0 0 3 4):", label_visibility="collapsed")
 
 			if st.button("Update Model"):
 				if new_sentence and new_label:
